@@ -31,7 +31,6 @@ app.get("/consumos", async (req, res) => {
     res.status(500).json({ error: err.toString() });
   }
 });
-
 app.get("/inventario", async (req, res) => {
   try {
     const pool = await sql.connect(config);
@@ -43,7 +42,14 @@ app.get("/inventario", async (req, res) => {
       FROM [palim].[INVENTARIO_SAP]
       WHERE [Alm. (Almacén)] = 'A300'
         AND TRY_CAST(Material AS BIGINT) IS NOT NULL
+        AND Fecha_Foto = (SELECT MAX(Fecha_Foto) FROM [palim].[INVENTARIO_SAP])
     `);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).json({ error: err.toString() });
+  }
+});
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.json(result.recordset);
   } catch (err) {
