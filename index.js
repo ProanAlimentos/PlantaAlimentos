@@ -43,7 +43,7 @@ app.get("/inventario", async (req, res) => {
         [Libre utilización (UMB)] AS inventario_kg,
         Fecha_Foto AS fecha_foto
       FROM [palim].[INVENTARIO_SAP]
-      WHERE [Alm.] = 'A300'
+      WHERE [Almacén] = 'A300'
         AND TRY_CAST(Material AS BIGINT) IS NOT NULL
     `);
     res.setHeader("Access-Control-Allow-Origin", "*");
