@@ -38,14 +38,14 @@ app.get("/inventario", async (req, res) => {
   try {
     const pool = await sql.connect(config);
     const result = await pool.request().query(`
-      SELECT 
-        TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
-        [Libre utilización (UMB)] AS inventario_kg,
-        Fecha_Foto AS fecha_foto
-      FROM [palim].[INVENTARIO_SAP]
-      WHERE [Almacén] = 'A300'
-        AND TRY_CAST(Material AS BIGINT) IS NOT NULL
+      SELECT TOP 5 * FROM [palim].[INVENTARIO_SAP]
     `);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).json({ error: err.toString() });
+  }
+});
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.json(result.recordset);
   } catch (err) {
