@@ -31,6 +31,7 @@ app.get("/consumos", async (req, res) => {
     res.status(500).json({ error: err.toString() });
   }
 });
+
 app.get("/inventario", async (req, res) => {
   try {
     const pool = await sql.connect(config);
@@ -50,12 +51,7 @@ app.get("/inventario", async (req, res) => {
     res.status(500).json({ error: err.toString() });
   }
 });
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.json(result.recordset);
-  } catch (err) {
-    res.status(500).json({ error: err.toString() });
-  }
-});
+
 app.listen(3000, () => {
   console.log("API PROAN Plan de Reposición corriendo en puerto 3000");
 });
