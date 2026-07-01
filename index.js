@@ -38,8 +38,9 @@ app.get("/inventario", async (req, res) => {
   try {
     const pool = await sql.connect(config);
     const result = await pool.request().query(`
-      SELECT TOP 5 * FROM [palim].[INVENTARIO_SAP]
-    `);
+    const result = await pool.request().query(`
+  SELECT TOP 5 * FROM [palim].[INVENTARIO_SAP]
+`);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.json(result.recordset);
   } catch (err) {
