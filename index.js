@@ -13,12 +13,11 @@ const config = {
   }
 };
 
-// Endpoint: Consumos (palim KOB1)
 app.get("/consumos", async (req, res) => {
   try {
     const pool = await sql.connect(config);
     const result = await pool.request().query(`
-      SELECT 
+      SELECT
         TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
         FechaDeCreacionReal AS fecha,
         CantidadTotal AS consumo_kg
@@ -33,20 +32,12 @@ app.get("/consumos", async (req, res) => {
   }
 });
 
-// Endpoint: Inventario (palim INVENTARIO_SAP)
 app.get("/inventario", async (req, res) => {
   try {
     const pool = await sql.connect(config);
     const result = await pool.request().query(`
-    const result = await pool.request().query(`
-  SELECT TOP 5 * FROM [palim].[INVENTARIO_SAP]
-`);
-    res.setHeader("Access-Control-Allow-Origin", "*");
-    res.json(result.recordset);
-  } catch (err) {
-    res.status(500).json({ error: err.toString() });
-  }
-});
+      SELECT TOP 5 * FROM [palim].[INVENTARIO_SAP]
+    `);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.json(result.recordset);
   } catch (err) {
