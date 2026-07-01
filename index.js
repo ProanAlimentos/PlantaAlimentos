@@ -22,7 +22,7 @@ app.get("/consumos", async (req, res) => {
         TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
         FechaDeCreacionReal AS fecha,
         CantidadTotal AS consumo_kg
-      FROM [palim KOB1]
+      FROM [palim].[KOB1]
       WHERE BEKNZ = 'S'
         AND TRY_CAST(Material AS BIGINT) IS NOT NULL
     `);
@@ -42,7 +42,7 @@ app.get("/inventario", async (req, res) => {
         TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
         [Libre utilización (UMB)] AS inventario_kg,
         Fecha_Foto AS fecha_foto
-      FROM [palim INVENTARIO_SAP]
+      FROM [palim].[INVENTARIO_SAP]
       WHERE [Alm.] = 'A300'
         AND TRY_CAST(Material AS BIGINT) IS NOT NULL
     `);
