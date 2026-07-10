@@ -41,6 +41,7 @@ app.get("/inventario", async (req, res) => {
       SELECT
         TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
         [Libre utilización (UMB)] AS inventario_kg,
+        [Valor libre util.] AS valor_inventario,
         Fecha_Foto AS fecha_foto
       FROM [palim].[INVENTARIO_SAP]
       WHERE [Alm. (Almacén)] = 'A300'
@@ -62,6 +63,7 @@ app.get("/inventario-historico", async (req, res) => {
       SELECT
         TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
         [Libre utilización (UMB)] AS inventario_kg,
+        [Valor libre util.] AS valor_inventario,
         Fecha_Foto AS fecha_foto
       FROM [palim].[INVENTARIO_SAP]
       WHERE [Alm. (Almacén)] = 'A300'
