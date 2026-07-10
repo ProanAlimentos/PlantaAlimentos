@@ -13,6 +13,7 @@ const config = {
   }
 };
 
+// Endpoint: Consumos (palim KOB1)
 app.get("/consumos", async (req, res) => {
   try {
     const pool = await sql.connect(config);
@@ -32,6 +33,7 @@ app.get("/consumos", async (req, res) => {
   }
 });
 
+// Endpoint: Inventario actual (solo fecha más reciente)
 app.get("/inventario", async (req, res) => {
   try {
     const pool = await sql.connect(config);
@@ -44,6 +46,27 @@ app.get("/inventario", async (req, res) => {
       WHERE [Alm. (Almacén)] = 'A300'
         AND TRY_CAST(Material AS BIGINT) IS NOT NULL
         AND CAST(Fecha_Foto AS DATE) = (SELECT CAST(MAX(Fecha_Foto) AS DATE) FROM [palim].[INVENTARIO_SAP])
+    `);
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.json(result.recordset);
+  } catch (err) {
+    res.status(500).json({ error: err.toString() });
+  }
+});
+
+// Endpoint: Inventario histórico (registro de ~14hrs de cada día)
+app.get("/inventario-historico", async (req, res) => {
+  try {
+    const pool = await sql.connect(config);
+    const result = await pool.request().query(`
+      SELECT
+        TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
+        [Libre utilización (UMB)] AS inventario_kg,
+        Fecha_Foto AS fecha_foto
+      FROM [palim].[INVENTARIO_SAP]
+      WHERE [Alm. (Almacén)] = 'A300'
+        AND TRY_CAST(Material AS BIGINT) IS NOT NULL
+        AND DATEPART(HOUR, Fecha_Foto) BETWEEN 13 AND 15
     `);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.json(result.recordset);
