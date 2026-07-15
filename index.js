@@ -13,7 +13,7 @@ const config = {
   }
 };
 
-// Endpoint: Consumos (palim KOB1)
+// Endpoint: Consumos (palim KOB1) - con deduplicación por BELNR
 app.get("/consumos", async (req, res) => {
   try {
     const pool = await sql.connect(config);
@@ -22,9 +22,18 @@ app.get("/consumos", async (req, res) => {
         TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
         FechaDeCreacionReal AS fecha,
         CantidadTotal AS consumo_kg
-      FROM [palim].[KOB1]
-      WHERE BEKNZ = 'S'
-        AND TRY_CAST(Material AS BIGINT) IS NOT NULL
+      FROM (
+        SELECT
+          Material,
+          FechaDeCreacionReal,
+          CantidadTotal,
+          BEKNZ,
+          ROW_NUMBER() OVER (PARTITION BY BELNR ORDER BY BELNR ASC) AS rn
+        FROM [palim].[KOB1]
+        WHERE BEKNZ = 'S'
+          AND TRY_CAST(Material AS BIGINT) IS NOT NULL
+      ) AS deduplicado
+      WHERE rn = 1
     `);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.json(result.recordset);
