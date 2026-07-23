@@ -15,8 +15,11 @@ const config = {
 
 // Endpoint: Consumos (KOB1 + traspasos 309 desde A300, SHKZG='H') - con deduplicación
 app.get("/consumos", async (req, res) => {
+  const inicio = Date.now();
+  console.log("[/consumos] Iniciando conexión a SQL...");
   try {
     const pool = await sql.connect(config);
+    console.log("[/consumos] Conectado, ejecutando query...");
     const result = await pool.request().query(`
       SELECT mat_sap, fecha, consumo_kg FROM (
         -- Consumos directos (KOB1)
@@ -52,6 +55,7 @@ app.get("/consumos", async (req, res) => {
             AND WERKS IN ('SAP3', 'PAN3')
             AND LGORT = 'A300'
             AND SHKZG = 'H'
+            AND BUDAT_MKPF >= '20260101'
             AND TRY_CAST(MATNR AS BIGINT) IS NOT NULL
         ) AS deduplicado_traspasos
         WHERE rn = 1
