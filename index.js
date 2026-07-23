@@ -10,11 +10,13 @@ const config = {
   options: {
     encrypt: true,
     trustServerCertificate: false
-  },
-  requestTimeout: 120000
+  }
 };
 
-// Endpoint: Consumos (KOB1 + traspasos 309 desde A300, SHKZG='H') - con deduplicación
+// Endpoint: Consumos (palim KOB1) - con deduplicación por BELNR
+// NOTA: la unión con traspasos (MovimientosDeInventario_PlantaAlimentos) quedó
+// pausada temporalmente por falta de índice en esa tabla (ver ticket a IT/DBA).
+// Cuando se resuelva, restaurar el UNION ALL con el bloque de traspasos.
 app.get("/consumos", async (req, res) => {
   const inicio = Date.now();
   console.log("[/consumos] Iniciando conexión a SQL...");
@@ -22,81 +24,28 @@ app.get("/consumos", async (req, res) => {
     const pool = await sql.connect(config);
     console.log("[/consumos] Conectado, ejecutando query...");
     const result = await pool.request().query(`
-      SELECT mat_sap, fecha, consumo_kg FROM (
-        -- Consumos directos (KOB1)
+      SELECT
+        TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
+        FechaDeCreacionReal AS fecha,
+        CantidadTotal AS consumo_kg
+      FROM (
         SELECT
-          TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
-          TRY_CAST(FechaDeCreacionReal AS DATE) AS fecha,
-          CantidadTotal AS consumo_kg
-        FROM (
-          SELECT
-            Material,
-            FechaDeCreacionReal,
-            CantidadTotal,
-            BEKNZ,
-            ROW_NUMBER() OVER (PARTITION BY BELNR ORDER BY BELNR ASC) AS rn
-          FROM [palim].[KOB1]
-          WHERE BEKNZ = 'S'
-            AND TRY_CAST(Material AS BIGINT) IS NOT NULL
-        ) AS deduplicado_kob1
-        WHERE rn = 1
-
-        UNION ALL
-
-        -- Consumos vía traspasos (mov. 309, saliendo de A300, lado Haber)
-        SELECT
-          TRY_CAST(TRY_CAST(MATNR AS BIGINT) AS INT) AS mat_sap,
-          TRY_CAST(BUDAT_MKPF AS DATE) AS fecha,
-          MENGE AS consumo_kg
-        FROM (
-          SELECT *,
-            ROW_NUMBER() OVER (PARTITION BY MBLNR, MJAHR, ZEILE ORDER BY MBLNR ASC) AS rn
-          FROM [palim].[MovimientosDeInventario_PlantaAlimentos]
-          WHERE BWART = '309'
-            AND WERKS IN ('SAP3', 'PAN3')
-            AND LGORT = 'A300'
-            AND SHKZG = 'H'
-            AND BUDAT_MKPF >= '20260101'
-            AND TRY_CAST(MATNR AS BIGINT) IS NOT NULL
-        ) AS deduplicado_traspasos
-        WHERE rn = 1
-      ) AS consumos_unificados
+          Material,
+          FechaDeCreacionReal,
+          CantidadTotal,
+          BEKNZ,
+          ROW_NUMBER() OVER (PARTITION BY BELNR ORDER BY BELNR ASC) AS rn
+        FROM [palim].[KOB1]
+        WHERE BEKNZ = 'S'
+          AND TRY_CAST(Material AS BIGINT) IS NOT NULL
+      ) AS deduplicado
+      WHERE rn = 1
     `);
     console.log(`[/consumos] Query terminada en ${Date.now() - inicio} ms, ${result.recordset.length} filas`);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.json(result.recordset);
   } catch (err) {
     console.log(`[/consumos] ERROR tras ${Date.now() - inicio} ms:`, err.toString());
-    res.status(500).json({ error: err.toString() });
-  }
-});
-
-// ENDPOINT TEMPORAL DE DIAGNÓSTICO - borrar después de probar
-app.get("/diag-traspasos", async (req, res) => {
-  const inicio = Date.now();
-  console.log("[/diag-traspasos] Iniciando...");
-  try {
-    const pool = await sql.connect(config);
-    console.log(`[/diag-traspasos] Conectado en ${Date.now() - inicio} ms, ejecutando...`);
-    const result = await pool.request().query(`
-      SELECT COUNT(*) AS total_filas
-      FROM (
-        SELECT *,
-          ROW_NUMBER() OVER (PARTITION BY MBLNR, MJAHR, ZEILE ORDER BY MBLNR ASC) AS rn
-        FROM [palim].[MovimientosDeInventario_PlantaAlimentos]
-        WHERE BWART = '309'
-          AND WERKS IN ('SAP3', 'PAN3')
-          AND LGORT = 'A300'
-          AND SHKZG = 'H'
-          AND BUDAT_MKPF >= '20260101'
-          AND TRY_CAST(MATNR AS BIGINT) IS NOT NULL
-      ) AS dedup
-      WHERE rn = 1
-    `);
-    console.log(`[/diag-traspasos] Terminado en ${Date.now() - inicio} ms`);
-    res.json({ tiempo_ms: Date.now() - inicio, ...result.recordset[0] });
-  } catch (err) {
-    console.log(`[/diag-traspasos] ERROR tras ${Date.now() - inicio} ms:`, err.toString());
     res.status(500).json({ error: err.toString() });
   }
 });
