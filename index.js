@@ -10,7 +10,8 @@ const config = {
   options: {
     encrypt: true,
     trustServerCertificate: false
-  }
+  },
+  requestTimeout: 120000
 };
 
 // Endpoint: Consumos (KOB1 + traspasos 309 desde A300, SHKZG='H') - con deduplicación
