@@ -13,27 +13,49 @@ const config = {
   }
 };
 
-// Endpoint: Consumos (palim KOB1) - con deduplicación por BELNR
+// Endpoint: Consumos (KOB1 + traspasos 309 desde A300, SHKZG='H') - con deduplicación
 app.get("/consumos", async (req, res) => {
   try {
     const pool = await sql.connect(config);
     const result = await pool.request().query(`
-      SELECT
-        TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
-        FechaDeCreacionReal AS fecha,
-        CantidadTotal AS consumo_kg
-      FROM (
+      SELECT mat_sap, fecha, consumo_kg FROM (
+        -- Consumos directos (KOB1)
         SELECT
-          Material,
-          FechaDeCreacionReal,
-          CantidadTotal,
-          BEKNZ,
-          ROW_NUMBER() OVER (PARTITION BY BELNR ORDER BY BELNR ASC) AS rn
-        FROM [palim].[KOB1]
-        WHERE BEKNZ = 'S'
-          AND TRY_CAST(Material AS BIGINT) IS NOT NULL
-      ) AS deduplicado
-      WHERE rn = 1
+          TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
+          TRY_CAST(FechaDeCreacionReal AS DATE) AS fecha,
+          CantidadTotal AS consumo_kg
+        FROM (
+          SELECT
+            Material,
+            FechaDeCreacionReal,
+            CantidadTotal,
+            BEKNZ,
+            ROW_NUMBER() OVER (PARTITION BY BELNR ORDER BY BELNR ASC) AS rn
+          FROM [palim].[KOB1]
+          WHERE BEKNZ = 'S'
+            AND TRY_CAST(Material AS BIGINT) IS NOT NULL
+        ) AS deduplicado_kob1
+        WHERE rn = 1
+
+        UNION ALL
+
+        -- Consumos vía traspasos (mov. 309, saliendo de A300, lado Haber)
+        SELECT
+          TRY_CAST(TRY_CAST(MATNR AS BIGINT) AS INT) AS mat_sap,
+          TRY_CAST(BUDAT_MKPF AS DATE) AS fecha,
+          MENGE AS consumo_kg
+        FROM (
+          SELECT *,
+            ROW_NUMBER() OVER (PARTITION BY MBLNR, MJAHR, ZEILE ORDER BY MBLNR ASC) AS rn
+          FROM [palim].[MovimientosDeInventario_PlantaAlimentos]
+          WHERE BWART = '309'
+            AND WERKS IN ('SAP3', 'PAN3')
+            AND LGORT = 'A300'
+            AND SHKZG = 'H'
+            AND TRY_CAST(MATNR AS BIGINT) IS NOT NULL
+        ) AS deduplicado_traspasos
+        WHERE rn = 1
+      ) AS consumos_unificados
     `);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.json(result.recordset);
