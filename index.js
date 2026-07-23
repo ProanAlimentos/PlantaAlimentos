@@ -61,9 +61,41 @@ app.get("/consumos", async (req, res) => {
         WHERE rn = 1
       ) AS consumos_unificados
     `);
+    console.log(`[/consumos] Query terminada en ${Date.now() - inicio} ms, ${result.recordset.length} filas`);
     res.setHeader("Access-Control-Allow-Origin", "*");
     res.json(result.recordset);
   } catch (err) {
+    console.log(`[/consumos] ERROR tras ${Date.now() - inicio} ms:`, err.toString());
+    res.status(500).json({ error: err.toString() });
+  }
+});
+
+// ENDPOINT TEMPORAL DE DIAGNÓSTICO - borrar después de probar
+app.get("/diag-traspasos", async (req, res) => {
+  const inicio = Date.now();
+  console.log("[/diag-traspasos] Iniciando...");
+  try {
+    const pool = await sql.connect(config);
+    console.log(`[/diag-traspasos] Conectado en ${Date.now() - inicio} ms, ejecutando...`);
+    const result = await pool.request().query(`
+      SELECT COUNT(*) AS total_filas
+      FROM (
+        SELECT *,
+          ROW_NUMBER() OVER (PARTITION BY MBLNR, MJAHR, ZEILE ORDER BY MBLNR ASC) AS rn
+        FROM [palim].[MovimientosDeInventario_PlantaAlimentos]
+        WHERE BWART = '309'
+          AND WERKS IN ('SAP3', 'PAN3')
+          AND LGORT = 'A300'
+          AND SHKZG = 'H'
+          AND BUDAT_MKPF >= '20260101'
+          AND TRY_CAST(MATNR AS BIGINT) IS NOT NULL
+      ) AS dedup
+      WHERE rn = 1
+    `);
+    console.log(`[/diag-traspasos] Terminado en ${Date.now() - inicio} ms`);
+    res.json({ tiempo_ms: Date.now() - inicio, ...result.recordset[0] });
+  } catch (err) {
+    console.log(`[/diag-traspasos] ERROR tras ${Date.now() - inicio} ms:`, err.toString());
     res.status(500).json({ error: err.toString() });
   }
 });
