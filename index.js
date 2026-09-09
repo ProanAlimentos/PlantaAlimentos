@@ -25,12 +25,14 @@ app.get("/consumos", async (req, res) => {
       SELECT
         TRY_CAST(TRY_CAST(Material AS BIGINT) AS INT) AS mat_sap,
         FechaDeCreacionReal AS fecha,
-        CantidadTotal AS consumo_kg
+        CantidadTotal AS consumo_kg,
+        ImporteEnMonedaDeTransaccion AS importe_consumo
       FROM (
         SELECT
           Material,
           FechaDeCreacionReal,
           CantidadTotal,
+          ImporteEnMonedaDeTransaccion,
           BEKNZ,
           ROW_NUMBER() OVER (PARTITION BY BELNR ORDER BY BELNR ASC) AS rn
         FROM [palim].[KOB1]
