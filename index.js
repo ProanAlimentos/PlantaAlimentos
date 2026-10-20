@@ -134,6 +134,98 @@ app.get("/inventario-historico", async (req, res) => {
   }
 });
 
+// Endpoint: Repartos de órdenes de compra (palim ME23N)
+// Un renglón por OC + posición + reparto. Dos formas de consulta:
+//   GET /repartos?desde=2026-11-01&hasta=2026-12-31   -> importar OCs nuevas (por fecha de entrega)
+//   GET /repartos?ocs=4502477111,4502476691          -> actualizar OCs ya importadas
+// Con "ocs" se ignoran las fechas, para encontrar también los repartos que
+// se movieron fuera del rango. Si no llega ningún parámetro, se usa desde el
+// día 1 del mes actual hasta 120 días después.
+// Fechas devueltas como texto "YYYY-MM-DD" para evitar corrimientos por zona horaria.
+const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
+const OC_RE = /^\d{6,12}$/;
+
+app.get("/repartos", async (req, res) => {
+  const inicio = Date.now();
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  try {
+    const ocsParam = String(req.query.ocs ?? "").trim();
+    let desde = String(req.query.desde ?? "").trim();
+    let hasta = String(req.query.hasta ?? "").trim();
+
+    const ocs = ocsParam
+      ? ocsParam.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+    if (ocs.length > 500) {
+      return res.status(400).json({ error: "Máximo 500 OCs por consulta" });
+    }
+    const ocInvalida = ocs.find((oc) => !OC_RE.test(oc));
+    if (ocInvalida) {
+      return res.status(400).json({ error: `OC inválida: ${ocInvalida}` });
+    }
+
+    if (!ocs.length) {
+      if (!desde) {
+        const hoy = new Date();
+        desde = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, "0")}-01`;
+      }
+      if (!hasta) {
+        const d = new Date(`${desde}T12:00:00`);
+        d.setDate(d.getDate() + 120);
+        hasta = d.toISOString().slice(0, 10);
+      }
+      if (!FECHA_RE.test(desde) || !FECHA_RE.test(hasta)) {
+        return res.status(400).json({ error: "Usa fechas con formato YYYY-MM-DD" });
+      }
+      if (desde > hasta) {
+        return res.status(400).json({ error: "'desde' no puede ser mayor que 'hasta'" });
+      }
+    }
+
+    const pool = await sql.connect(config);
+    const request = pool.request();
+    let filtro;
+    if (ocs.length) {
+      request.input("ocs", sql.NVarChar(sql.MAX), ocs.join(","));
+      filtro = `TRY_CAST(EBELN AS BIGINT) IN (
+        SELECT TRY_CAST(value AS BIGINT) FROM STRING_SPLIT(@ocs, ',')
+      )`;
+    } else {
+      request.input("desde", sql.Date, desde);
+      request.input("hasta", sql.Date, hasta);
+      filtro = `CAST(EINDT AS DATE) BETWEEN @desde AND @hasta`;
+    }
+
+    console.log(`[/repartos] ${ocs.length ? `${ocs.length} OCs` : `${desde} a ${hasta}`}`);
+    const result = await request.query(`
+      SELECT
+        CAST(TRY_CAST(EBELN AS BIGINT) AS VARCHAR(20)) AS oc,
+        TRY_CAST(EBELP AS INT)                         AS posicion,
+        TRY_CAST(ETENR AS INT)                         AS reparto,
+        TRY_CAST(TRY_CAST(LIFNR AS BIGINT) AS INT)     AS proveedor_sap,
+        TRY_CAST(TRY_CAST(MATNR AS BIGINT) AS INT)     AS mat_sap,
+        WERKS                                          AS centro,
+        CONVERT(CHAR(10), CAST(EINDT AS DATE), 23)     AS fecha_entrega,
+        CAST(MENGE AS DECIMAL(18,3))                   AS cantidad,
+        CAST(WEMNG AS DECIMAL(18,3))                   AS recibido,
+        CAST(CASE WHEN OBMNG < 0 THEN 0 ELSE OBMNG END AS DECIMAL(18,3)) AS pendiente,
+        MEINS                                          AS unidad
+        -- Cuando la consulta traiga el indicador de borrado y el de entrega final, agregar:
+        -- , LOEKZ AS borrado
+        -- , ELIKZ AS entrega_final
+      FROM [palim].[ME23N]
+      WHERE ${filtro}
+        AND TRY_CAST(MATNR AS BIGINT) IS NOT NULL
+      ORDER BY oc, posicion, reparto
+    `);
+    console.log(`[/repartos] ${result.recordset.length} filas en ${Date.now() - inicio} ms`);
+    res.json(result.recordset);
+  } catch (err) {
+    console.log(`[/repartos] ERROR tras ${Date.now() - inicio} ms:`, err.toString());
+    res.status(500).json({ error: err.toString() });
+  }
+});
+
 app.listen(3000, () => {
   console.log("API PROAN Plan de Reposición corriendo en puerto 3000");
 });
