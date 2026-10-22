@@ -226,6 +226,57 @@ app.get("/repartos", async (req, res) => {
   }
 });
 
+// Endpoint: Catálogo de proveedores SAP (tabla Proveedores)
+// Solo código y nombre. El código viene como texto con ceros a la izquierda
+// ("0000003721"); se devuelve como número (3721) para cruzar con proveedor_sap.
+//   GET /proveedores                      -> todo el catálogo
+//   GET /proveedores?codigos=3721,664     -> solo esos proveedores
+app.get("/proveedores", async (req, res) => {
+  const inicio = Date.now();
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  try {
+    const codigosParam = String(req.query.codigos ?? "").trim();
+    const codigos = codigosParam
+      ? codigosParam.split(",").map((s) => s.trim()).filter(Boolean)
+      : [];
+    if (codigos.length > 1000) {
+      return res.status(400).json({ error: "Máximo 1000 códigos por consulta" });
+    }
+    const codigoInvalido = codigos.find((c) => !/^\d{1,10}$/.test(c));
+    if (codigoInvalido) {
+      return res.status(400).json({ error: `Código inválido: ${codigoInvalido}` });
+    }
+
+    const pool = await sql.connect(config);
+    const request = pool.request();
+    let filtro = "";
+    if (codigos.length) {
+      request.input("codigos", sql.NVarChar(sql.MAX), codigos.join(","));
+      filtro = `AND TRY_CAST(LIFNR AS BIGINT) IN (
+        SELECT TRY_CAST(value AS BIGINT) FROM STRING_SPLIT(@codigos, ',')
+      )`;
+    }
+
+    // Un renglón por proveedor aunque la tabla traiga duplicados.
+    const result = await request.query(`
+      SELECT
+        TRY_CAST(TRY_CAST(LIFNR AS BIGINT) AS INT) AS proveedor_sap,
+        MAX(LTRIM(RTRIM(NAME1)))                   AS nombre
+      FROM [palim].[Proveedores]
+      WHERE TRY_CAST(LIFNR AS BIGINT) IS NOT NULL
+        AND NULLIF(LTRIM(RTRIM(NAME1)), '') IS NOT NULL
+        ${filtro}
+      GROUP BY TRY_CAST(TRY_CAST(LIFNR AS BIGINT) AS INT)
+      ORDER BY proveedor_sap
+    `);
+    console.log(`[/proveedores] ${result.recordset.length} filas en ${Date.now() - inicio} ms`);
+    res.json(result.recordset);
+  } catch (err) {
+    console.log(`[/proveedores] ERROR tras ${Date.now() - inicio} ms:`, err.toString());
+    res.status(500).json({ error: err.toString() });
+  }
+});
+
 app.listen(3000, () => {
   console.log("API PROAN Plan de Reposición corriendo en puerto 3000");
 });
