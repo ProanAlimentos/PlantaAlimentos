@@ -262,7 +262,7 @@ app.get("/proveedores", async (req, res) => {
       SELECT
         TRY_CAST(TRY_CAST(LIFNR AS BIGINT) AS INT) AS proveedor_sap,
         MAX(LTRIM(RTRIM(NAME1)))                   AS nombre
-      FROM [palim].[Proveedores]
+      FROM [dbo].[Proveedores]
       WHERE TRY_CAST(LIFNR AS BIGINT) IS NOT NULL
         AND NULLIF(LTRIM(RTRIM(NAME1)), '') IS NOT NULL
         ${filtro}
